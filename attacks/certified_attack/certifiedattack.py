@@ -1,7 +1,14 @@
 import os
 
 import torch
-from scipy.stats import norm, binom_test
+from scipy.stats import norm
+try:
+    from scipy.stats import binom_test
+except ImportError:
+    from scipy.stats import binomtest
+
+    def binom_test(*args, **kwargs):
+        return binomtest(*args, **kwargs).pvalue
 import numpy as np
 from math import ceil
 from statsmodels.stats.proportion import proportion_confint
@@ -72,13 +79,19 @@ class perceptual_criteria(nn.Module):
 
 class CertifiedAttack(object):
 
-    def __init__(self, num_classes: int,query_batch_size:int, N: int, p: float, input_size:int, pdf_args,pdf,norm,initialization,shifting,diffusion=None,device='cuda:0',max_query=10000,epsilon=8.0, pert_norm="inf",blacklight=False,rand_sigma=0,post_sigma=0):
+    def __init__(self, num_classes: int,query_batch_size:int, N: int, p: float, input_size:int, pdf_args,pdf,norm,initialization,shifting,confidence_level=0.999,binary_search_steps=15,diffusion=None,device='cuda:0',max_query=10000,epsilon=8.0, pert_norm="inf",blacklight=False,rand_sigma=0,post_sigma=0):
         self.num_classes = num_classes
         self.batch_size=query_batch_size
         self.pdf=pdf
         self.N=N
         self.pdf_args=pdf_args
         self.p=p
+        if not 0 < confidence_level < 1:
+            raise ValueError("confidence_level must be between 0 and 1.")
+        if binary_search_steps < 1:
+            raise ValueError("binary_search_steps must be positive.")
+        self.confidence_level=confidence_level
+        self.binary_search_steps=int(binary_search_steps)
         self.input_size=input_size
         if norm==-1:
             self.norm=np.inf
@@ -113,12 +126,12 @@ class CertifiedAttack(object):
             'average_num_queries':np.mean(self.query_list),
             'failure_rate':1-np.sum(self.success_list)/len(self.success_list),
             'certified_acc':np.sum(self.certified_success)/len(self.certified_success),
-            'mean_distance':np.mean(self.mean_distance),
+            'mean_distance':np.mean(self.mean_distance) if self.mean_distance else None,
             'distance':np.mean(self.empirical_distance),
             'blacklight_detection_rate':self.blacklight_detection/len(self.query_list) if self.blacklight else None,
             'blacklight_coverage':np.mean(self.blacklight_cover) if self.blacklight else None,
             'blacklight_query_to_detect': np.mean(self.blacklight_query_to_detect_list) if self.blacklight else None,
-            'RPQ': np.mean(self.RPQ_nums)
+            'RPQ': np.mean(self.RPQ_nums) if self.RPQ_nums else None
         }
         return result
     def initial_adv(self, x,y,x_adv=None,step_size = 3/255, eps=18/255):
@@ -174,7 +187,7 @@ class CertifiedAttack(object):
 
         # N = self.MC_Num
         num_classes = self.num_classes
-        alpha = 0.001
+        ci_alpha = 1 - self.confidence_level
         with torch.no_grad():
 
             x_adv = x_adv.to(self.device)
@@ -219,7 +232,7 @@ class CertifiedAttack(object):
                 counts_g[i] = (pred == i).sum()
             # print(counts_g)
             NA=np.sum(counts_g)-counts_g[y]
-            pABar = proportion_confint(NA, self.N, alpha=2 * alpha, method="beta")[0]
+            pABar = proportion_confint(NA, self.N, alpha=ci_alpha, method="beta")[0]
 
             if self.blacklight:
                 self.blacklight_detect(noisy_input)
@@ -320,7 +333,7 @@ class CertifiedAttack(object):
             if n>=85:
                 x_adv=None
             else:
-                max_iter=15
+                max_iter=self.binary_search_steps
                 tol=0.1
                 low = x.clone()
                 high = x_adv.clone()

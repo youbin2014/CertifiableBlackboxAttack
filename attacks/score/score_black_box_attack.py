@@ -112,6 +112,9 @@ class ScoreBlackBoxAttack(object):
         self.total_extra_queries = int(self.total_extra_queries)
         self.total_successes = int(self.total_successes)
         self.total_failures = int(self.total_failures)
+        blacklight_detection_rate = self.blacklight_detection / self.testnum if self.blacklight and self.testnum > 0 else None
+        blacklight_coverage = np.mean(self.blacklight_cover_list) if self.blacklight and self.blacklight_cover_list else None
+        blacklight_query_to_detect = np.mean(self.blacklight_query_to_detect_list) if self.blacklight and self.blacklight_query_to_detect_list else None
         return {
             "total_loss_queries": self.total_loss_queries,
             "total_extra_queries": self.total_extra_queries,
@@ -124,10 +127,10 @@ class ScoreBlackBoxAttack(object):
             "total_failures": self.total_failures,
             "failure_rate": "NaN" if self.total_successes + self.total_failures == 0 else self.total_failures / (self.total_successes + self.total_failures),
             "config": self._config(),
-            "blacklight_detection_rate":  self.blacklight_detection / self.testnum if self.testnum>0 else "NaN",
-            "blacklight_coverage": np.mean(self.blacklight_cover_list),
-            "blacklight_query_to_detect":np.mean(self.blacklight_query_to_detect_list),
-            "distance": np.mean(self.distances)
+            "blacklight_detection_rate": blacklight_detection_rate,
+            "blacklight_coverage": blacklight_coverage,
+            "blacklight_query_to_detect": blacklight_query_to_detect,
+            "distance": np.mean(self.distances) if self.distances else None
         }
 
     def _config(self):
@@ -381,9 +384,17 @@ class ScoreBlackBoxAttack(object):
             if its % 1 == 0:
                 success_mask = dones_mask * correct_classified_mask
                 total_successes = float(success_mask.sum())
-                print ("Iteration : ", its, 'ave_loss_queries : ', ((num_loss_queries * success_mask).sum() / total_successes).item(),\
-                    "ave_extra_queries : ", ((num_extra_queries * success_mask).sum()  / total_successes).item(), \
-                    "ave_queries : ", ((num_loss_queries * success_mask).sum() / total_successes + (num_extra_queries * success_mask).sum()  / total_successes).item(), \
+                if total_successes > 0:
+                    ave_loss_queries = ((num_loss_queries * success_mask).sum() / total_successes).item()
+                    ave_extra_queries = ((num_extra_queries * success_mask).sum() / total_successes).item()
+                    ave_queries = ave_loss_queries + ave_extra_queries
+                else:
+                    ave_loss_queries = "no_success_yet"
+                    ave_extra_queries = "no_success_yet"
+                    ave_queries = "no_success_yet"
+                print ("Iteration : ", its, 'ave_loss_queries : ', ave_loss_queries,\
+                    "ave_extra_queries : ", ave_extra_queries, \
+                    "ave_queries : ", ave_queries, \
                     "successes : ", success_mask.sum().item() / float(success_mask.shape[0]), \
                     "failures : ", ((~dones_mask) * correct_classified_mask).sum().item()  / float(success_mask.shape[0]))
                 sys.stdout.flush()

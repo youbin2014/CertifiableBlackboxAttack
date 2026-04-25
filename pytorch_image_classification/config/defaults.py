@@ -22,6 +22,11 @@ config.attack.target= False
 config.attack.target_type="median"
 config.attack.test_sample=-1
 config.attack.test_sample_seed=42
+# Backward-compatible command-line aliases for CertifiedAttack.
+# These are translated to attack.CertifiedAttack.* in update_config().
+config.attack.num_samples=None
+config.attack.confidence_level=None
+config.attack.binary_search_steps=None
 
 
 config.attack.CertifiedAttack=ConfigNode()
@@ -29,8 +34,10 @@ config.attack.CertifiedAttack.diffusion=False
 config.attack.CertifiedAttack.pdf="Gaussian"
 config.attack.CertifiedAttack.MonteNum=50
 config.attack.CertifiedAttack.query_batch=50
-config.attack.CertifiedAttack.p=0.9
-config.attack.CertifiedAttack.pdf_args=[-1,0.01]
+config.attack.CertifiedAttack.p=0.1
+config.attack.CertifiedAttack.confidence_level=0.999
+config.attack.CertifiedAttack.binary_search_steps=15
+config.attack.CertifiedAttack.pdf_args=[-1,0.025]
 config.attack.CertifiedAttack.norm=2
 config.attack.CertifiedAttack.initialization="bin_search"
 config.attack.CertifiedAttack.shifting="geo"

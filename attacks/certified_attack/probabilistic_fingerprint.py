@@ -4,7 +4,6 @@ import sys
 import numpy as np
 from multiprocessing import Pool
 import pickle
-import imp
 
 np.random.seed(666)
 

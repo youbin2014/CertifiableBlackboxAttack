@@ -26,6 +26,11 @@ from pytorch_image_classification.utils import (
 )
 
 
+class TrustedCheckpointer(Checkpointer):
+    def _load_file(self, f):
+        return torch.load(f, map_location=torch.device("cpu"), weights_only=False)
+
+
 def load_config():
     parser = argparse.ArgumentParser()
     parser.add_argument('--config', type=str, required=True)
@@ -97,9 +102,9 @@ def main():
 
     model = create_model(config)
     model = apply_data_parallel_wrapper(config, model)
-    checkpointer = Checkpointer(model=model,
-                                save_dir=output_dir,
-                                save_to_disk=get_rank() == 0)
+    checkpointer = TrustedCheckpointer(model=model,
+                                       save_dir=output_dir,
+                                       save_to_disk=get_rank() == 0)
     checkpointer.load(config.test.checkpoint)
 
     test_loader = create_dataloader(config, is_train=False)

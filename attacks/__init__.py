@@ -21,9 +21,23 @@ from attacks.certified_attack.certifiedattack import CertifiedAttack
 from attacks.certified_attack.pdf_functions import *
 def get_attack(config: yacs.config.CfgNode):
 
-    if config.test.batch_size!=1:
-        print("The batch size for attack evaluation must be 1! Otherwise the evaluation is incorrect!")
-        raise NotImplementedError
+    batch_one_attacks = {
+        "CertifiedAttack",
+        "PointWise",
+        "SparseEvo",
+        "SignOPT",
+        "HSJ",
+        "GeoDA",
+        "Opt",
+        "Evolutionary",
+        "SignFlip",
+        "RayS",
+        "Boundary",
+    }
+    if config.defense.blacklight and config.test.batch_size != 1:
+        raise ValueError("Blacklight evaluation requires test.batch_size 1.")
+    if config.attack.name in batch_one_attacks and config.test.batch_size != 1:
+        raise ValueError(f"{config.attack.name} evaluation requires test.batch_size 1.")
 
     if config.attack.name == "CertifiedAttack":
 
@@ -70,6 +84,8 @@ def get_attack(config: yacs.config.CfgNode):
                            query_batch_size=config.attack.CertifiedAttack.query_batch,
                            N=config.attack.CertifiedAttack.MonteNum,
                            p=config.attack.CertifiedAttack.p,
+                           confidence_level=config.attack.CertifiedAttack.confidence_level,
+                           binary_search_steps=config.attack.CertifiedAttack.binary_search_steps,
                            input_size=config.dataset.image_size*config.dataset.image_size*config.dataset.n_channels,
                            pdf_args=config.attack.CertifiedAttack.pdf_args,
                            pdf=noise_distribution,

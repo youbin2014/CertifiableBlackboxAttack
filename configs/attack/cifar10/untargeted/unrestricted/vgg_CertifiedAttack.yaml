@@ -12,11 +12,11 @@ attack:
   CertifiedAttack:
     initialization: bin_search
     shifting: geo
-    pdf_args: [-1,0.25]
-    p: 0.90
+    pdf_args: [-1,0.025]
+    p: 0.1
     diffusion: False
-    MonteNum: 1000
-    query_batch: 1000
+    MonteNum: 50
+    query_batch: 50
 test:
   checkpoint: 'experiments/cifar10/vgg/exp00/checkpoint_00160.pth'
   output_dir: 'experiments/attack/cifar10/untargeted/unrestricted/decision/vgg/CA/'

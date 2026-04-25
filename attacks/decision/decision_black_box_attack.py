@@ -92,6 +92,9 @@ class DecisionBlackBoxAttack(object):
         self.total_queries = int(self.total_queries)
         self.total_successes = int(self.total_successes)
         self.total_failures = int(self.total_failures)
+        blacklight_detection_rate = self.blacklight_detection / self.blacklight_total_sample if self.blacklight and self.blacklight_total_sample > 0 else None
+        blacklight_coverage = np.mean(self.blacklight_cover_list) if self.blacklight and self.blacklight_cover_list else None
+        blacklight_query_to_detect = np.mean(self.blacklight_query_to_detect_list) if self.blacklight and self.blacklight_query_to_detect_list else None
         return {
             "total_queries": self.total_queries,
             "total_successes": self.total_successes,
@@ -100,10 +103,10 @@ class DecisionBlackBoxAttack(object):
             "failure_rate": "NaN" if self.total_successes + self.total_failures == 0 else self.total_failures / (self.total_successes + self.total_failures),
             "median_num_loss_queries": "NaN" if self.total_successes == 0 else torch.median(list_loss_queries).item(), 
             "config": self._config(),
-            "blacklight_detection_rate":self.blacklight_detection/self.blacklight_total_sample if self.blacklight_total_sample>0 else None,
-            "blacklight_coverage":np.mean(self.blacklight_cover_list),
-            "blacklight_query_to_detect":np.mean(self.blacklight_query_to_detect_list),
-            "distance": np.mean(self.distances)
+            "blacklight_detection_rate": blacklight_detection_rate,
+            "blacklight_coverage": blacklight_coverage,
+            "blacklight_query_to_detect": blacklight_query_to_detect,
+            "distance": np.mean(self.distances) if self.distances else None
 
         }
 

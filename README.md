@@ -15,17 +15,19 @@ A comprehensive framework for black-box adversarial attacks with theoretical gua
 1. [Overview](#-overview)
 2. [Key Features](#-key-features)
 3. [Quick Start](#-quick-start)
-4. [Installation Guide](#-installation-guide)
-5. [Supported Attacks](#-supported-attacks)
-6. [Tutorials](#-tutorials)
-7. [Usage Examples](#-usage-examples)
-8. [Project Structure](#-project-structure)
-9. [Configuration Guide](#-configuration-guide)
-10. [API Reference](#-api-reference)
-11. [Results & Benchmarks](#-results--benchmarks)
-12. [Citation](#-citation)
-13. [Contributing](#-contributing)
-14. [FAQ & Troubleshooting](#-faq--troubleshooting)
+4. [Reproducibility Checklist](#reproducibility-checklist)
+5. [Installation Guide](#-installation-guide)
+6. [Supported Attacks](#-supported-attacks)
+7. [Tutorials](#-tutorials)
+8. [Usage Examples](#-usage-examples)
+9. [Project Structure](#-project-structure)
+10. [Configuration Guide](#-configuration-guide)
+11. [API Reference](#-api-reference)
+12. [Results & Benchmarks](#-results--benchmarks)
+13. [Citation](#-citation)
+14. [Contributing](#-contributing)
+15. [FAQ & Troubleshooting](#-faq--troubleshooting)
+16. [Contact](#contact)
 
 ---
 
@@ -72,18 +74,68 @@ CertifiedAttack introduces a groundbreaking approach to black-box adversarial at
 
 ```bash
 # 1. Clone the repository
-git clone https://github.com/yourusername/CertifiedAttack.git
+git clone https://github.com/datasec-lab/CertifiedAttack.git
 cd CertifiedAttack
 
-# 2. Install dependencies
+# 2. Fetch pretrained checkpoints
+git lfs install
+git lfs pull
+
+# 3. Create an environment
+python -m venv certifiedattack_env
+source certifiedattack_env/bin/activate  # Linux/macOS
+# certifiedattack_env\Scripts\activate   # Windows PowerShell
+
+# 4. Install PyTorch first. Pick the wheel matching your CUDA version.
+# Example for CUDA 12.1:
+pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
+
+# 5. Install the rest of the dependencies
 pip install -r requirements.txt
 
-# 3. Run your first attack
+# 6. Run the default paper-v3 CIFAR-10/VGG attack
 python attack.py --config configs/attack/cifar10/untargeted/unrestricted/vgg_CertifiedAttack.yaml
-
-# 4. Or try the interactive demo
-python examples/quick_start.py --demo
 ```
+
+---
+
+## Reproducibility Checklist
+
+Use this checklist before reporting a reproduction issue.
+
+1. **Check checkpoints**
+   ```bash
+   git lfs install
+   git lfs pull
+   ls experiments/cifar10/vgg/exp00/checkpoint_00160.pth
+   ```
+
+2. **Check the clean model**
+   ```bash
+   python evaluate.py --config configs/evaluate/vgg.yaml \
+       test.dataloader.num_workers 0 \
+       test.output_dir experiments/cifar10/vgg/exp00/clean_verify
+   ```
+   With the provided CIFAR-10/VGG checkpoint, clean accuracy should be about `91%`.
+
+3. **Run a fast smoke test**
+   ```bash
+   python attack.py --config configs/attack/cifar10/untargeted/unrestricted/vgg_CertifiedAttack.yaml \
+       test.dataloader.num_workers 0 \
+       attack.test_sample 20 \
+       test.output_dir experiments/attack/smoke/cifar10_vgg_CA_paper_default
+   ```
+   The default config follows the paper-v3 comparison setting: `p=10%`, `sigma=0.025`, `alpha=0.001`, `MonteNum=50`, `query_batch=50`, and `max_loss_queries=10000`.
+
+4. **Run the full default reproduction**
+   ```bash
+   python attack.py --config configs/attack/cifar10/untargeted/unrestricted/vgg_CertifiedAttack.yaml \
+       test.dataloader.num_workers 0 \
+       test.output_dir experiments/attack/repro/cifar10_vgg_CA_paper_default
+   ```
+   On our CIFAR-10/VGG run over 1,000 samples, the post-attack model accuracy was `0.0%`, the average query count was about `473`, and all saved `preds/probs` were finite.
+
+For the paper ablation setting (`p=90%`, `sigma=0.25`, `MonteNum=1000`), use the explicit override command in [Usage Examples](#-usage-examples). That setting needs a larger query budget, for example `attack.max_loss_queries 100000`.
 
 ---
 
@@ -93,6 +145,7 @@ python examples/quick_start.py --demo
 
 **Minimum:**
 - Python 3.8+
+- Git LFS for pretrained checkpoints
 - 8 GB RAM
 - 10 GB disk space
 
@@ -138,22 +191,9 @@ conda activate certifiedattack
 
 ```bash
 # Clone and install in development mode
-git clone https://github.com/yourusername/CertifiedAttack.git
+git clone https://github.com/datasec-lab/CertifiedAttack.git
 cd CertifiedAttack
 pip install -e .
-```
-
-#### Method 4: Using Docker
-
-```bash
-# Build Docker image
-docker build -t certifiedattack:latest .
-
-# Run with GPU support
-docker run --gpus all -it -v $(pwd):/workspace certifiedattack:latest
-
-# Run CPU only
-docker run -it -v $(pwd):/workspace certifiedattack:latest
 ```
 
 ### Platform-Specific Instructions
@@ -201,7 +241,7 @@ pip3 install -r requirements.txt
 
 ```powershell
 # Clone repository
-git clone https://github.com/yourusername/CertifiedAttack.git
+git clone https://github.com/datasec-lab/CertifiedAttack.git
 cd CertifiedAttack
 
 # Create virtual environment
@@ -412,8 +452,8 @@ python script.py --config CONFIG_FILE [options]
 # Override specific parameters
 python attack.py --config config.yaml \
     device cuda:1 \
-    attack.epsilon 0.05 \
-    attack.num_iterations 200
+    attack.epsilon 8.0 \
+    attack.max_loss_queries 2000
 ```
 
 ### Attack Examples
@@ -421,16 +461,28 @@ python attack.py --config config.yaml \
 #### Running Our CertifiedAttack
 
 ```bash
-# Binary search variant (default)
+# Paper v3 comparison setting is the default:
+# p=10%, sigma=0.025, alpha=0.001, Monte Carlo samples=50.
+python attack.py --config configs/attack/cifar10/untargeted/unrestricted/vgg_CertifiedAttack.yaml
+
+# Paper v3 ablation / randomized-smoothing setting, when needed:
+# p=90%, sigma=0.25, alpha=0.001, Monte Carlo samples=1000.
 python attack.py --config configs/attack/cifar10/untargeted/unrestricted/vgg_CertifiedAttack.yaml \
-    attack.num_samples 1000 \
-    attack.confidence_level 0.95 \
-    attack.binary_search_steps 20
+    attack.CertifiedAttack.p 0.90 \
+    attack.CertifiedAttack.pdf_args "[-1,0.25]" \
+    attack.CertifiedAttack.MonteNum 1000 \
+    attack.CertifiedAttack.query_batch 1000 \
+    attack.CertifiedAttack.confidence_level 0.999 \
+    attack.CertifiedAttack.binary_search_steps 15 \
+    attack.max_loss_queries 100000
+
+# Backward-compatible aliases are also supported:
+#   attack.num_samples -> attack.CertifiedAttack.MonteNum
+#   attack.confidence_level -> attack.CertifiedAttack.confidence_level
+#   attack.binary_search_steps -> attack.CertifiedAttack.binary_search_steps
 
 # SSSP variant (faster)
-python attack.py --config configs/attack/cifar10/untargeted/unrestricted/vgg_CertifiedAttack_sssp.yaml \
-    attack.sssp_iterations 50 \
-    attack.pixel_search_method "gradient"
+python attack.py --config configs/attack/cifar10/untargeted/unrestricted/vgg_CertifiedAttack_sssp.yaml
 ```
 
 #### Running Baseline Attacks
@@ -438,25 +490,25 @@ python attack.py --config configs/attack/cifar10/untargeted/unrestricted/vgg_Cer
 **Score-based attacks:**
 ```bash
 # NES Attack
-python attack.py --config configs/attack/cifar10/untargeted/l2/resnet_NES.yaml
+python attack.py --config configs/attack/cifar10/untargeted/l2/score/vgg_NES.yaml
 
 # Square Attack  
-python attack.py --config configs/attack/cifar10/untargeted/linf/resnet_Square.yaml
+python attack.py --config configs/attack/cifar10/untargeted/linf/score/vgg_Square.yaml
 
 # SimBA
-python attack.py --config configs/attack/cifar10/untargeted/l2/resnet_SimBA.yaml
+python attack.py --config configs/attack/cifar10/untargeted/l2/score/vgg_Simple.yaml
 ```
 
 **Decision-based attacks:**
 ```bash
 # Boundary Attack
-python attack.py --config configs/attack/cifar10/untargeted/l2/resnet_Boundary.yaml
+python attack.py --config configs/attack/cifar10/untargeted/l2/decision/vgg_Boundary.yaml
 
 # HSJA
-python attack.py --config configs/attack/cifar10/untargeted/linf/resnet_HSJA.yaml
+python attack.py --config configs/attack/cifar10/untargeted/linf/decision/vgg_HSJ.yaml
 
 # RayS
-python attack.py --config configs/attack/cifar10/untargeted/linf/decision/resnet_RayS.yaml
+python attack.py --config configs/attack/cifar10/untargeted/linf/decision/vgg_RayS.yaml
 ```
 
 ### Training Examples
@@ -494,19 +546,17 @@ python evaluate_robustness.py \
 ### Batch Processing
 
 ```bash
-# Run all attacks on CIFAR-10
-bash run_attacks_cifar10.sh
+# Run the CIFAR-10/CIFAR-100 attack batches included in this repo
+bash run_attacks.sh
 
 # Run specific defense evaluations
 bash run_attacks_blacklight_cifar10.sh
 bash run_attacks_RAND_cifar10.sh
 bash run_attacks_AT_cifar10.sh
 
-# Custom batch script
-for model in vgg resnet resnext wrn; do
-    for attack in CertifiedAttack Square HSJA RayS; do
-        python attack.py --config configs/attack/cifar10/untargeted/unrestricted/${model}_${attack}.yaml
-    done
+# Custom batch script for the CIFAR-10 VGG configs included in this repo
+for config in configs/attack/cifar10/untargeted/{l2,linf}/{score,decision}/vgg_*.yaml; do
+    python attack.py --config "$config"
 done
 ```
 
@@ -603,35 +653,37 @@ Our framework uses hierarchical YAML configurations:
 ```yaml
 # Example: configs/attack/cifar10/untargeted/unrestricted/vgg_CertifiedAttack.yaml
 
-# Inherit from base config
-_base_: path/to/base/config.yaml
-
-# Dataset settings
-dataset:
-  name: CIFAR10
-  data_dir: ./data
-  batch_size: 1
-  
-# Model settings  
-model:
-  name: vgg
-  checkpoint: ./experiments/cifar10/vgg/checkpoint.pth
-  
-# Attack settings
+device: cuda:0
+defense:
+  blacklight: False
+  sigma: 0.0
+  post_sigma: 0.0
 attack:
   name: CertifiedAttack
-  epsilon: 0.03
-  num_iterations: 1000
-  confidence_level: 0.95
-  binary_search_steps: 15
-  
-# Experiment settings
-experiment:
-  output_dir: ./experiments/attack/cifar10/vgg/CertifiedAttack
-  save_adversarial: True
-  
-# Device settings
-device: cuda:0
+  epsilon: 0.0
+  p: unrestricted
+  max_loss_queries: 10000
+  test_sample: 1000
+  CertifiedAttack:
+    initialization: bin_search
+    shifting: geo
+    pdf_args: [-1, 0.025]
+    p: 0.10
+    confidence_level: 0.999
+    binary_search_steps: 15
+    MonteNum: 50
+    query_batch: 50
+test:
+  checkpoint: experiments/cifar10/vgg/exp00/checkpoint_00160.pth
+  output_dir: experiments/attack/cifar10/untargeted/unrestricted/decision/vgg/CA/
+  batch_size: 1
+dataset:
+  name: CIFAR10
+  normalize: False
+model:
+  type: cifar
+  name: vgg
+  normalize_layer: True
 ```
 
 ### Common Configuration Patterns
@@ -640,19 +692,16 @@ device: cuda:0
 ```yaml
 attack:
   name: HSJA
-  norm: linf      # or 'l2'
-  epsilon: 8/255  # for linf
-  # epsilon: 0.5  # for l2
+  p: linf      # or 'l2'
+  epsilon: 8.0 # pixel-space epsilon; attack code divides by 255 where needed
 ```
 
 **2. Defense configuration:**
 ```yaml
 defense:
-  name: blacklight
-  threshold: 0.9
-  # OR
-  name: RAND
-  noise_level: 0.1
+  blacklight: True
+  sigma: 0.0       # input RAND noise
+  post_sigma: 0.0  # output RAND noise
 ```
 
 **3. Training configuration:**
@@ -674,18 +723,19 @@ scheduler:
 
 ### Creating Custom Configurations
 
-1. **Extend existing config:**
+1. **Copy an existing config:**
 ```yaml
 # my_config.yaml
-_base_: configs/attack/cifar10/untargeted/unrestricted/vgg_CertifiedAttack.yaml
+# Copy configs/attack/cifar10/untargeted/unrestricted/vgg_CertifiedAttack.yaml
+# and override only the fields you need.
 
-# Override specific settings
 attack:
-  num_samples: 2000
-  confidence_level: 0.99
-  
-experiment:
-  name: "high_confidence_attack"
+  name: CertifiedAttack
+  CertifiedAttack:
+    MonteNum: 2000
+    query_batch: 1000
+    confidence_level: 0.99
+    binary_search_steps: 20
 ```
 
 2. **Use config from command line:**
@@ -881,20 +931,24 @@ Use GitHub Issues with:
 
 **Q: CUDA out of memory error**
 ```bash
-# Reduce batch size
-python attack.py --config config.yaml attack.batch_size 16
+# CertifiedAttack and decision-based attacks require batch size 1.
+python attack.py --config config.yaml test.batch_size 1
 
-# Or use gradient accumulation
-python train.py --config config.yaml train.gradient_accumulation_steps 4
+# For score-based attacks without Blacklight, reduce the test batch size.
+python attack.py --config config.yaml test.batch_size 16
 ```
 
 **Q: No checkpoint found**
 ```bash
-# First train a model
-python train.py --config configs/cifar10/resnet.yaml
+# Pretrained checkpoints are tracked in the experiments/ directory via Git LFS.
+git lfs install
+git lfs pull
 
-# Or download pretrained models
-python scripts/download_models.py
+# Then verify the expected CIFAR-10/VGG checkpoint exists.
+ls experiments/cifar10/vgg/exp00/checkpoint_00160.pth
+
+# Alternatively, train a model from scratch.
+python train.py --config configs/cifar10/resnet.yaml
 ```
 
 **Q: Import errors**
@@ -915,7 +969,10 @@ pip install -e .
 
 2. **Query Efficiency**
    - Start with SSSP variant for quick results
-   - Adjust `binary_search_steps` for accuracy/speed trade-off
+   - Keep `attack.max_loss_queries` above `attack.CertifiedAttack.MonteNum * (1 + attack.CertifiedAttack.binary_search_steps)` so CertifiedAttack can finish initialization before the budget is exhausted
+   - To match the paper's randomized parallel query count, set `attack.CertifiedAttack.query_batch` equal to `attack.CertifiedAttack.MonteNum`
+   - Paper v3 uses `attack.max_loss_queries 10000` for CIFAR-10/CIFAR-100 and `1000` for ImageNet comparison experiments
+   - Adjust `attack.CertifiedAttack.binary_search_steps` for accuracy/speed trade-off
    - Use early stopping when confidence is achieved
 
 3. **Parallel Execution**
@@ -926,8 +983,12 @@ pip install -e .
 
 ### Getting Help
 
-- 💬 GitHub Issues: [Create an issue](https://github.com/yourusername/CertifiedAttack/issues)
-- 📚 Documentation: [Wiki](https://github.com/yourusername/CertifiedAttack/wiki)
+- 💬 GitHub Issues: [Create an issue](https://github.com/datasec-lab/CertifiedAttack/issues)
+- Email for reproduction questions: youbinhhh@gmail.com
+
+## Contact
+
+If you have any questions about reproducing the experiments or using this repository, please open a GitHub issue or contact youbinhhh@gmail.com.
 
 ---
 

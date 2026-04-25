@@ -53,24 +53,34 @@ Our proposed certified attack method with different variants:
 
 #### Binary Search Variant
 ```bash
-# CIFAR-10 with VGG
+# Paper v3 comparison setting is the default:
+# p=10%, sigma=0.025, alpha=0.001, Monte Carlo samples=50.
+python attack.py --config "./configs/attack/cifar10/untargeted/unrestricted/vgg_CertifiedAttack.yaml" \
+    device cuda:0
+
+# Paper v3 ablation / randomized-smoothing setting, when needed:
+# p=90%, sigma=0.25, alpha=0.001, Monte Carlo samples=1000.
 python attack.py --config "./configs/attack/cifar10/untargeted/unrestricted/vgg_CertifiedAttack.yaml" \
     device cuda:0 \
-    attack.num_samples 1000 \
-    attack.confidence_level 0.95
+    attack.CertifiedAttack.p 0.90 \
+    attack.CertifiedAttack.pdf_args "[-1,0.25]" \
+    attack.CertifiedAttack.MonteNum 1000 \
+    attack.CertifiedAttack.query_batch 1000 \
+    attack.CertifiedAttack.confidence_level 0.999 \
+    attack.CertifiedAttack.binary_search_steps 15 \
+    attack.max_loss_queries 100000
 
 # CIFAR-100 with ResNet
 python attack.py --config "./configs/attack/cifar100/untargeted/unrestricted/resnet_CertifiedAttack.yaml" \
     device cuda:0 \
-    attack.binary_search_steps 15
+    attack.CertifiedAttack.binary_search_steps 15
 ```
 
 #### SSSP (Single-Step Single-Pixel) Variant
 ```bash
 # SSSP variant on ImageNet
 python attack.py --config "./configs/attack/imagenet_RAND/untargeted/unrestricted/resnet_CertifiedAttack_sssp.yaml" \
-    device cuda:0 \
-    attack.sssp_iterations 50
+    device cuda:0
 ```
 
 ### Black-box Attacks
@@ -78,34 +88,34 @@ python attack.py --config "./configs/attack/imagenet_RAND/untargeted/unrestricte
 #### Score-based Attacks
 ```bash
 # NES Attack
-python attack.py --config "./configs/attack/cifar10/untargeted/l2/resnet_NES.yaml"
+python attack.py --config "./configs/attack/cifar10/untargeted/l2/score/vgg_NES.yaml"
 
 # Square Attack
-python attack.py --config "./configs/attack/cifar10/untargeted/linf/resnet_Square.yaml"
+python attack.py --config "./configs/attack/cifar10/untargeted/linf/score/vgg_Square.yaml"
 
 # SimBA Attack
-python attack.py --config "./configs/attack/cifar10/untargeted/l2/resnet_SimBA.yaml"
+python attack.py --config "./configs/attack/cifar10/untargeted/l2/score/vgg_Simple.yaml"
 ```
 
 #### Decision-based Attacks
 ```bash
 # Boundary Attack
-python attack.py --config "./configs/attack/cifar10/untargeted/l2/resnet_Boundary.yaml"
+python attack.py --config "./configs/attack/cifar10/untargeted/l2/decision/vgg_Boundary.yaml"
 
 # HSJA Attack
-python attack.py --config "./configs/attack/cifar10/untargeted/linf/resnet_HSJA.yaml"
+python attack.py --config "./configs/attack/cifar10/untargeted/linf/decision/vgg_HSJ.yaml"
 
 # GeoDA Attack
-python attack.py --config "./configs/attack/cifar10/untargeted/l2/resnet_GeoDA.yaml"
+python attack.py --config "./configs/attack/cifar10/untargeted/l2/decision/vgg_GeoDA.yaml"
 ```
 
 #### Sparse Attacks
 ```bash
 # PointWise Attack
-python attack.py --config "./configs/attack/cifar10/untargeted/unrestricted/resnet_PointWise.yaml"
+python attack.py --config "./configs/attack/cifar10/untargeted/unrestricted/vgg_PointWise.yaml"
 
 # SparseEvo Attack
-python attack.py --config "./configs/attack/cifar10/untargeted/unrestricted/resnet_SparseEvo.yaml"
+python attack.py --config "./configs/attack/cifar10/untargeted/unrestricted/vgg_SparseEvo.yaml"
 ```
 
 ### Attacks with Defenses
@@ -243,8 +253,15 @@ model:
   
 attack:
   name: CertifiedAttack
-  epsilon: 0.03
-  num_iterations: 100
+  epsilon: 0.0
+  max_loss_queries: 10000
+  CertifiedAttack:
+    p: 0.10
+    pdf_args: [-1, 0.025]
+    MonteNum: 50
+    query_batch: 50
+    confidence_level: 0.999
+    binary_search_steps: 15
   
 device: cuda:0
 ```
@@ -260,7 +277,7 @@ python attack.py --config base.yaml attack.epsilon 0.05
 # Override multiple parameters
 python attack.py --config base.yaml \
     attack.epsilon 0.05 \
-    attack.num_iterations 200 \
+    attack.max_loss_queries 2000 \
     device cuda:1
 ```
 
@@ -268,16 +285,15 @@ python attack.py --config base.yaml \
 
 1. **Extend existing config**:
 ```yaml
-# my_config.yaml
-_base_: ./configs/attack/cifar10/untargeted/unrestricted/vgg_CertifiedAttack.yaml
-
-# Override specific settings
+# Copy configs/attack/cifar10/untargeted/unrestricted/vgg_CertifiedAttack.yaml
+# and override only the fields you need.
 attack:
-  num_samples: 2000
-  confidence_level: 0.99
-  
-experiment:
-  name: "high_confidence_attack"
+  name: CertifiedAttack
+  CertifiedAttack:
+    MonteNum: 2000
+    query_batch: 1000
+    confidence_level: 0.99
+    binary_search_steps: 20
 ```
 
 2. **Use the custom config**:
@@ -333,13 +349,11 @@ python train.py --config "./configs/cifar10/resnet.yaml" \
 ### Running Multiple Attacks
 ```bash
 # Use provided scripts
-bash run_attacks_cifar10.sh
+bash run_attacks.sh
 
 # Or create custom batch script
-for model in vgg resnet resnext wrn; do
-    for attack in CertifiedAttack PointWise SparseEvo; do
-        python attack.py --config "./configs/attack/cifar10/untargeted/unrestricted/${model}_${attack}.yaml"
-    done
+for config in configs/attack/cifar10/untargeted/{l2,linf}/{score,decision}/vgg_*.yaml; do
+    python attack.py --config "$config"
 done
 ```
 
@@ -366,13 +380,13 @@ model:
 attack:
   name: CertifiedAttack
   epsilon: 0.05
-  num_samples: 1500
-  binary_search_steps: 20
-  confidence_level: 0.95
-  
-experiment:
+  CertifiedAttack:
+    MonteNum: 1500
+    query_batch: 1000
+    binary_search_steps: 20
+    confidence_level: 0.95
+test:
   output_dir: ./results/custom_attack
-  save_adversarial_examples: True
 ```
 
 2. **Run the experiment**:
@@ -404,12 +418,11 @@ plt.savefig('attack_performance.png')
 
 ### Custom Metrics and Logging
 
-```python
-# Add custom metrics to evaluation
+```bash
+# Evaluation writes predictions, probabilities, labels, loss, and accuracy
+# to test.output_dir/predictions.npz.
 python evaluate.py --config "./configs/evaluate/vgg.yaml" \
-    evaluate.custom_metrics ["perturbation_size", "query_efficiency"] \
-    evaluate.log_interval 10 \
-    evaluate.save_predictions True
+    test.output_dir "./experiments/cifar10/vgg/exp00/clean"
 ```
 
 ## Tips and Best Practices
@@ -417,15 +430,14 @@ python evaluate.py --config "./configs/evaluate/vgg.yaml" \
 1. **Start with small experiments**: Test with reduced dataset size or iterations
    ```bash
    python attack.py --config config.yaml \
-       dataset.subset_size 100 \
-       attack.num_iterations 10
+       attack.test_sample 100 \
+       attack.max_loss_queries 10000
    ```
 
-2. **Monitor GPU memory**: Adjust batch size if OOM
+2. **Monitor GPU memory**: Adjust batch size if OOM. CertifiedAttack and decision-based attacks require `test.batch_size 1`; score-based attacks can use larger batches when Blacklight is disabled.
    ```bash
    python attack.py --config config.yaml \
-       attack.batch_size 16 \
-       train.gradient_accumulation_steps 4
+       test.batch_size 1
    ```
 
 3. **Use tensorboard for monitoring**:
@@ -434,18 +446,17 @@ python evaluate.py --config "./configs/evaluate/vgg.yaml" \
    tensorboard --logdir ./experiments/
    ```
 
-4. **Save intermediate results**:
+4. **Save outputs to a custom directory**:
    ```bash
    python attack.py --config config.yaml \
-       experiment.save_interval 100 \
-       experiment.save_intermediate True
+       test.output_dir ./results/custom_attack
    ```
 
-5. **Debug mode**:
+5. **Quick smoke test**:
    ```bash
    python attack.py --config config.yaml \
-       debug True \
-       dataset.subset_size 10
+       attack.test_sample 10 \
+       attack.max_loss_queries 100
    ```
 
 ## Getting Help
